@@ -190,7 +190,8 @@ rqt_graph
 문서에 이미지를 넣을 때는 다음과 같이 작성할 수 있다.
 
 ```md
-![talker_listener_rqt_graph](./talker_listener_rqt_graph.png)
+![talker_listener_rqt_graph](./rpt_graph.png)
+
 ```
 
 ---
