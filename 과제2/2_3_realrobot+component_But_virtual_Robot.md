@@ -302,6 +302,8 @@ ros2 run turtlesim turtle_teleop_key
 | → | 오른쪽 회전 |
 
 ---
+![talker_listener_rqt_graph](./all_screen_turtlenode.png)
+
 
 ## 11. turtlesim 노드 간 관계
 
