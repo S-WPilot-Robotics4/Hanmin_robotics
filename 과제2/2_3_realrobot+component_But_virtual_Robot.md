@@ -1,6 +1,4 @@
-# 3_node.md
-
-# ROS2 노드(Node)에 대한 조사
+# ROS2 노드(Node)와 rqt_graph 실습
 
 ## 1. 수행목표
 
@@ -181,18 +179,9 @@ rqt_graph
 
 `rqt_graph` 화면에서 `Nodes only` 모드를 선택하면 `/talker` 노드와 `/listener` 노드의 관계를 확인할 수 있다.
 
-저장할 캡처 이미지 예시는 다음과 같이 정리할 수 있다.
-
-```text
-2/3/talker_listener_rqt_graph.png
-```
-
-문서에 이미지를 넣을 때는 다음과 같이 작성할 수 있다.
-
-```md
 ![talker_listener_rqt_graph](./rpt_graph.png)
 
-```
+위 캡처에서 `/talker` 노드가 `/chatter` 토픽을 발행하고, `/listener` 노드가 해당 토픽을 구독하는 구조를 확인할 수 있다.
 
 ---
 
@@ -325,6 +314,14 @@ ros2 run turtlesim turtle_teleop_key
 | `/turtle1/cmd_vel` | 거북이에게 전달되는 속도 명령 토픽 |
 
 관계는 다음과 같이 표현할 수 있다.
+| 구분     | 이름                                          | 역할                             | 방향                            |
+| ------ | ------------------------------------------- | ------------------------------ | ----------------------------- |
+| 노드     | `/teleop_turtle`                            | 키보드 입력을 받아 거북이 제어 명령을 생성하는 노드  | 명령 송신                         |
+| 노드     | `/turtlesim`                                | 거북이 시뮬레이션을 실행하고 명령을 받아 움직이는 노드 | 명령 수신                         |
+| 토픽     | `/turtle1/cmd_vel`                          | 거북이의 선속도와 각속도 명령을 전달하는 토픽      | `/teleop_turtle → /turtlesim` |
+| 액션 피드백 | `/turtle1/rotate_absolute/_action/feedback` | 절대 각도 회전 동작의 진행 상황을 전달         | `/turtlesim → /teleop_turtle` |
+| 액션 상태  | `/turtle1/rotate_absolute/_action/status`   | 절대 각도 회전 동작의 현재 상태를 전달         | `/turtlesim → /teleop_turtle` |
+
 
 ```text
 /turtle_teleop_key → /turtle1/cmd_vel → /turtlesim
@@ -344,17 +341,7 @@ rqt_graph
 
 `Nodes only` 모드를 선택하거나 옵션을 조정하여 두 노드 사이의 관계가 잘 보이도록 설정한다. 화면이 갱신되지 않으면 리로드 버튼을 누른다.
 
-저장할 캡처 이미지 예시는 다음과 같다.
-
-```text
-2/3/turtlesim_rqt_graph.png
-```
-
-문서에 이미지를 넣을 때는 다음과 같이 작성할 수 있다.
-
-```md
-![turtlesim_rqt_graph](./turtlesim_rqt_graph.png)
-```
+이때 그래프에는 `turtle_teleop_key`가 `/turtle1/cmd_vel` 토픽을 발행하고, `turtlesim_node`가 이를 구독하는 흐름이 나타난다.
 
 ---
 
@@ -417,30 +404,7 @@ ros2 node info /teleop_turtle
 
 ---
 
-## 16. 제출 파일 구성
-
-프로젝트 루트에 다음과 같은 디렉토리를 생성한다.
-
-```bash
-mkdir -p 2/3
-```
-
-제출 파일 구성 예시는 다음과 같다.
-
-```text
-프로젝트루트/
-└── 2/
-    └── 3/
-        ├── 3_node.md
-        ├── talker_listener_rqt_graph.png
-        └── turtlesim_rqt_graph.png
-```
-
-각 이미지 파일은 직접 실습 후 캡처하여 같은 디렉토리에 저장한다.
-
----
-
-## 17. 참고자료
+## 16. 참고자료
 
 | 소제목 | 참고 링크 |
 |---|---|
@@ -450,4 +414,3 @@ mkdir -p 2/3
 | rqt_graph 사용 | https://docs.ros.org/en/humble/Tutorials/Beginner-CLI-Tools/Introspection-With-Rqt-Graph/Introspection-With-Rqt-Graph.html |
 | ros2 node 명령 | https://docs.ros.org/en/humble/Tutorials/Beginner-CLI-Tools/Understanding-ROS2-Nodes/Understanding-ROS2-Nodes.html |
 | turtlesim 튜토리얼 | https://docs.ros.org/en/humble/Tutorials/Beginner-CLI-Tools/Introducing-Turtlesim/Introducing-Turtlesim.html |
-| ROS2 Python API 문서 | https://docs.ros2.org/foxy/api/rclpy/index.html |
