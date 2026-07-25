@@ -83,7 +83,7 @@ ros2_ws/
 └── src/
 ```
 
-`mkdir -p`에서 `-p` 옵션은 상위 디렉토리가 없을 경우 함께 생성하고, 이미 디렉토리가 존재하더라도 오류를 발생시키지 않도록 한다.
+`mkdir -p`에서 `-p` 옵션은 만들려는 폴더의 바깥쪽 폴더가 없으면 바깥쪽 폴더부터 순서대로 함께 만든다. 예를 들어 `ros2_ws`가 없어도 `mkdir -p ~/ros2_ws/src`를 실행하면 `ros2_ws`를 먼저 만들고 그 안에 `src`를 만든다. 이미 폴더가 존재하는 경우에는 오류 없이 넘어간다.
 
 ---
 
@@ -181,6 +181,11 @@ ROS 2 패키지는 워크스페이스 루트가 아니라 `src` 디렉토리에�
 
 ```bash
 cd ~/ros2_ws/src
+```
+
+이번 실습에서는 `my_robot_controller`라는 Python 패키지를 생성한다.
+
+```bash
 ros2 pkg create \
   --build-type ament_python \
   --dependencies rclpy \
@@ -201,7 +206,241 @@ ros2 pkg create --build-type ament_python --dependencies rclpy --license Apache-
 - 의존 패키지: `rclpy`
 - 라이선스: `Apache-2.0`
 
-`--dependencies rclpy`를 지정하면 `package.xml`에 `rclpy` 의존성이 자동으로 추가된다.
+이 명령으로 패키지를 생성하면 기본 패키지 구조만 만들어진다. 실행 가능한 노드 파일은 자동으로 만들어지지 않으므로, 다음 단계에서 `controller_node.py`를 직접 만들고 `setup.py`에도 실행 항목을 등록해야 한다.
+
+### 6.3 생성된 기본 패키지 구조 확인
+
+```bash
+tree ~/ros2_ws/src/my_robot_controller
+```
+
+기본 생성 결과는 다음과 유사하다.
+
+```text
+my_robot_controller
+├── LICENSE
+├── my_robot_controller
+│   └── __init__.py
+├── package.xml
+├── resource
+│   └── my_robot_controller
+├── setup.cfg
+├── setup.py
+└── test
+    ├── test_copyright.py
+    ├── test_flake8.py
+    └── test_pep257.py
+```
+
+이 상태에서는 아직 `controller_node.py`가 없기 때문에 다음 명령을 실행하면 안 된다.
+
+```bash
+ros2 run my_robot_controller controller_node
+```
+
+실행 가능한 노드를 만들기 위해 다음 단계를 진행한다.
+
+### 6.4 controller_node.py 생성
+
+다음 명령으로 Python 노드 파일을 생성한다.
+
+```bash
+nano ~/ros2_ws/src/my_robot_controller/my_robot_controller/controller_node.py
+```
+
+아래 내용을 그대로 입력한다.
+
+```python
+import rclpy
+from rclpy.node import Node
+
+
+class RobotController(Node):
+
+    def __init__(self):
+        super().__init__('robot_controller')
+        self.get_logger().info('controller_node가 실행되었습니다.')
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = RobotController()
+
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        node.get_logger().info('사용자 요청으로 노드를 종료합니다.')
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
+```
+
+Nano 편집기에서는 다음 순서로 저장한다.
+
+```text
+Ctrl + O
+Enter
+Ctrl + X
+```
+
+이 코드는 다음과 같이 동작한다.
+
+1. `rclpy.init()`으로 ROS 2 통신 환경을 시작한다.
+2. `RobotController` 노드를 생성한다.
+3. `rclpy.spin(node)`으로 노드를 계속 실행한다.
+4. 사용자가 `Ctrl+C`를 누르면 `KeyboardInterrupt`를 처리한다.
+5. 노드와 ROS 2 통신 환경을 안전하게 종료한다.
+
+`try`, `except`, `finally`를 사용하지 않으면 `Ctrl+C`로 종료할 때 긴 `KeyboardInterrupt` 오류 내용이 출력될 수 있다. 위 코드처럼 작성하면 정상 종료 메시지만 출력되고 깔끔하게 종료된다.
+
+### 6.5 setup.py 수정
+
+`controller_node.py` 파일을 만들기만 해서는 `ros2 run` 명령이 자동으로 해당 파일을 찾지 못한다.
+
+따라서 `setup.py`에 실행 파일을 등록해야 한다.
+
+```bash
+nano ~/ros2_ws/src/my_robot_controller/setup.py
+```
+
+기존 파일의 `entry_points` 부분은 다음처럼 비어 있다.
+
+```python
+entry_points={
+    'console_scripts': [
+    ],
+},
+```
+
+이를 다음과 같이 수정한다.
+
+```python
+entry_points={
+    'console_scripts': [
+        'controller_node = my_robot_controller.controller_node:main',
+    ],
+},
+```
+
+수정된 `setup.py` 전체 예시는 다음과 같다.
+
+```python
+from setuptools import find_packages, setup
+
+package_name = 'my_robot_controller'
+
+setup(
+    name=package_name,
+    version='0.0.0',
+    packages=find_packages(exclude=['test']),
+    data_files=[
+        (
+            'share/ament_index/resource_index/packages',
+            ['resource/' + package_name]
+        ),
+        (
+            'share/' + package_name,
+            ['package.xml']
+        ),
+    ],
+    install_requires=['setuptools'],
+    zip_safe=True,
+    maintainer='hanmin',
+    maintainer_email='hanmin@todo.todo',
+    description='ROS 2 Python robot controller package',
+    license='Apache-2.0',
+    extras_require={
+        'test': [
+            'pytest',
+        ],
+    },
+    entry_points={
+        'console_scripts': [
+            'controller_node = my_robot_controller.controller_node:main',
+        ],
+    },
+)
+```
+
+다음 한 줄이 실행 파일을 연결하는 핵심 부분이다.
+
+```python
+'controller_node = my_robot_controller.controller_node:main',
+```
+
+각 부분은 다음 뜻이다.
+
+```text
+controller_node
+    └─ ros2 run 명령에서 입력할 실행 이름
+
+my_robot_controller.controller_node
+    └─ my_robot_controller/controller_node.py 파일
+
+main
+    └─ controller_node.py 안에서 실행할 main() 함수
+```
+
+즉 다음 명령을 실행하면:
+
+```bash
+ros2 run my_robot_controller controller_node
+```
+
+ROS 2는 다음 함수를 실행한다.
+
+```text
+my_robot_controller/controller_node.py의 main() 함수
+```
+
+### 6.6 setup.cfg 확인
+
+다음 명령으로 `setup.cfg`를 확인한다.
+
+```bash
+cat ~/ros2_ws/src/my_robot_controller/setup.cfg
+```
+
+정상적인 내용은 다음과 같다.
+
+```ini
+[develop]
+script_dir=$base/lib/my_robot_controller
+
+[install]
+install_scripts=$base/lib/my_robot_controller
+```
+
+이 파일은 Python 실행 스크립트가 설치될 위치를 지정한다. 보통 `ros2 pkg create` 명령으로 자동 생성되므로 별도로 수정할 필요는 없다.
+
+### 6.7 완성된 패키지 구조 확인
+
+```bash
+tree ~/ros2_ws/src/my_robot_controller
+```
+
+노드 파일까지 만든 뒤에는 다음과 같은 구조가 되어야 한다.
+
+```text
+my_robot_controller
+├── LICENSE
+├── my_robot_controller
+│   ├── __init__.py
+│   └── controller_node.py
+├── package.xml
+├── resource
+│   └── my_robot_controller
+├── setup.cfg
+├── setup.py
+└── test
+    ├── test_copyright.py
+    ├── test_flake8.py
+    └── test_pep257.py
+```
 
 ---
 
@@ -220,82 +459,6 @@ ROS 2에서 대표적으로 사용하는 빌드 유형은 다음과 같다.
 | `ament_cmake_python` | CMake 패키지 내부에서 Python 코드도 함께 설치할 때 사용 |
 
 `ament_python`은 Python의 `setuptools` 구조를 기반으로 ROS 2 Python 패키지를 설치한다. 따라서 패키지 루트에 `setup.py`, `setup.cfg`, `package.xml` 등이 생성된다.
-
-맞아. 한 ROS 2 패키지 안에서 C++ 코드와 Python 코드를 함께 포함하고 설치할 때 ament_cmake_python을 사용할 수 있어.
-
-다만 “C++과 Python이 자동으로 동시에 실행된다”는 뜻은 아니야.
-
-예를 들면 패키지 하나에 이렇게 들어갈 수 있어.
-
-my_robot_package/
-├── CMakeLists.txt
-├── package.xml
-├── src/
-│   └── camera_node.cpp
-├── include/
-│   └── my_robot_package/
-└── my_robot_package/
-    ├── __init__.py
-    └── analysis_node.py
-
-여기서:
-
-camera_node.cpp는 C++ ROS 2 노드
-analysis_node.py는 Python ROS 2 노드
-CMakeLists.txt는 C++ 빌드와 Python 파일 설치를 모두 설정
-ament_cmake_python은 Python 모듈을 ROS 2 설치 공간에 넣도록 도와줌
-
-빌드 후 각각 따로 실행할 수 있어.
-
-ros2 run my_robot_package camera_node
-ros2 run my_robot_package analysis_node
-
-두 노드를 동시에 실행하고 싶다면 각각 터미널에서 실행하거나 launch 파일을 사용해야 해.
-
-C++ 카메라 노드
-       │ 이미지 토픽 발행
-       ▼
-Python 분석 노드
-       │ 이미지 토픽 구독
-       ▼
-객체 탐지 및 결과 처리
-
-즉, 두 언어가 서로 직접 섞여서 한 프로그램처럼 동작한다기보다는, 보통은 C++ 노드와 Python 노드를 각각 만들고 ROS 2 토픽·서비스·액션으로 통신하게 만드는 방식이야.
-
-예를 들어 네 프로젝트라면:
-
-C++ 노드
-- FLIR 카메라 고속 데이터 수집
-- 영상 처리
-- 하드웨어 제어
-
-Python 노드
-- YOLO 객체 탐지
-- 온도 분석
-- DB 저장
-- Flask 서버 연동
-
-이렇게 역할을 나눌 수 있어.
-
-정리하면:
-
-빌드 유형	의미
-ament_cmake	주로 C++ 코드 빌드
-ament_python	순수 Python 패키지
-ament_cmake_python	CMake 기반 패키지에서 C++과 Python 코드를 함께 관리·설치
-
-과제 문서의 문장은 아래처럼 바꾸면 더 정확해.
-
-ament_cmake_python은 CMake 기반 ROS 2 패키지에서 C++ 코드와 Python 모듈을 함께 구성하고 설치할 때 사용하는 방식이다. 단, C++과 Python 코드가 자동으로 동시에 실행되는 것은 아니며, 각각의 노드로 실행하거나 launch 파일을 이용해 함께 실행할 수 있다.
-
-네 프로젝트에서는 이런 구성이 현실적이야.
-
-노드	언어	이유
-FLIR 영상 수집	C++	빠른 처리와 카메라 SDK 연동
-YOLO 객체 탐지	Python	PyTorch와 YOLO 사용이 편리함
-온도 위험도 판단	Python	분석 로직 작성이 편리함
-DB 저장 및 웹 API	Python	MariaDB, Flask 연동이 편리함
-하드웨어 실시간 제어	C++	일정하고 빠른 제어에 유리함
 
 ### 7.2 ament_python을 사용하는 이유
 
@@ -319,16 +482,17 @@ C++에서 사용하는 `rclcpp`와 대응되는 Python용 라이브러리이다.
 
 `rclpy`를 사용하면 Python 코드에서 다음 기능을 구현할 수 있다.
 
-- ROS 2 노드 생성
-- 토픽 Publisher 생성
-- 토픽 Subscriber 생성
-- Service 서버 및 Client 생성
-- Action 서버 및 Client 생성
-- Parameter 선언 및 사용
-- Timer와 Callback 실행
-- Logger를 통한 로그 출력
-- ROS 2 Context 초기화 및 종료
-- Executor를 통한 Callback 처리
+- **ROS 2 노드 생성**: ROS 2에서 동작하는 하나의 프로그램을 만든다.
+- **Publisher 생성**: 다른 노드에 데이터를 보낸다.
+- **Subscriber 생성**: 다른 노드가 보낸 데이터를 받는다.
+- **Service 서버 및 Client 생성**: 요청을 보내고 한 번의 응답을 받는다.
+- **Action 서버 및 Client 생성**: 오래 걸리는 작업을 요청하고 진행 상황과 결과를 받는다.
+- **Parameter 사용**: 속도나 기준값과 같은 설정값을 저장하고 변경한다.
+- **Timer 사용**: 일정한 시간마다 작업을 반복한다.
+- **Callback 실행**: 데이터나 요청이 들어왔을 때 실행할 함수를 정한다.
+- **Logger 사용**: 실행 상태나 오류 내용을 터미널에 출력한다.
+- **Context 초기화 및 종료**: ROS 2 통신 환경을 시작하고 종료한다.
+- **Executor 사용**: 여러 Callback이 실행되는 순서와 방식을 관리한다.
 
 ### 8.3 기본 사용 흐름
 
@@ -451,101 +615,6 @@ my_robot_controller/
   </export>
 </package>
 ```
-package.xml은 쉽게 말하면 이 ROS 2 패키지의 설명서이자 명세서야.
-
-ROS 2가 이 파일을 보고:
-
-패키지 이름이 무엇인지
-어떤 기능의 패키지인지
-누가 만들었는지
-어떤 라이브러리가 필요한지
-어떤 방식으로 빌드해야 하는지
-
-를 확인한다.
-
-각 항목은 이렇게 보면 돼.
-
-<?xml version="1.0"?>
-
-이 파일이 XML 형식으로 작성되었다는 뜻이다.
-
-<package format="3">
-
-ROS 패키지 형식 버전 3을 사용한다는 뜻이다.
-
-<name>my_robot_controller</name>
-
-패키지 이름이다.
-
-<version>0.0.0</version>
-
-패키지 버전이다. 처음 만든 상태라 보통 0.0.0으로 시작한다.
-
-<description>ROS 2 Python 로봇 제어 패키지</description>
-
-이 패키지가 무슨 역할을 하는지 설명한다.
-
-<maintainer email="student@example.com">Kim Hanmin</maintainer>
-
-패키지를 관리하는 사람의 이름과 이메일이다.
-
-<license>Apache-2.0</license>
-
-이 패키지를 어떤 조건으로 사용하거나 배포할 수 있는지를 나타내는 라이선스다.
-
-<depend>rclpy</depend>
-
-이 패키지가 실행되려면 rclpy가 필요하다는 뜻이다.
-
-즉, ROS 2에게 이렇게 알려주는 것이다.
-
-이 패키지는 Python용 ROS 2 라이브러리인 rclpy를 사용합니다.
-
-<test_depend>ament_copyright</test_depend>
-
-라이선스와 저작권 표기가 올바른지 검사할 때 사용하는 패키지다.
-
-<test_depend>ament_flake8</test_depend>
-
-Python 코드 스타일에 문제가 없는지 검사한다.
-
-예를 들어 들여쓰기, 띄어쓰기, 너무 긴 줄 등을 확인한다.
-
-<test_depend>ament_pep257</test_depend>
-
-Python 함수나 클래스의 설명문인 docstring이 규칙에 맞는지 검사한다.
-
-<test_depend>python3-pytest</test_depend>
-
-Python 테스트 코드를 실행하기 위한 테스트 도구다.
-
-<export>
-  <build_type>ament_python</build_type>
-</export>
-
-이 패키지는 Python 방식인 ament_python으로 빌드해야 한다는 뜻이다.
-
-마지막의:
-
-</package>
-
-는 패키지 정보가 여기서 끝났다는 뜻이다.
-
-전체적으로 보면 다음처럼 이해하면 된다.
-
-package.xml
-
-패키지 이름: my_robot_controller
-패키지 버전: 0.0.0
-설명: ROS 2 Python 로봇 제어 패키지
-관리자: Kim Hanmin
-필요한 라이브러리: rclpy
-테스트 도구: flake8, pytest 등
-빌드 방식: ament_python
-
-한 문장으로 정리하면:
-
-package.xml은 ROS 2에게 이 패키지가 무엇이고, 무엇이 필요하며, 어떤 방식으로 빌드해야 하는지를 알려주는 파일이다.
 
 ### 10.3 주요 태그
 
@@ -715,10 +784,16 @@ resource 파일은 보통 내용이 없는 빈 파일이지만, ROS 2의 ament i
 
 ## 14. 패키지 빌드
 
-패키지를 만든 후 워크스페이스 루트로 이동한다.
+패키지 파일 작성이 끝나면 워크스페이스 루트로 이동한다.
 
 ```bash
 cd ~/ros2_ws
+```
+
+ROS 2 Humble 환경을 적용한다.
+
+```bash
+source /opt/ros/humble/setup.bash
 ```
 
 의존성을 확인하고 설치한다.
@@ -727,64 +802,143 @@ cd ~/ros2_ws
 rosdep install --from-paths src --ignore-src -r -y
 ```
 
-패키지를 빌드한다.
-
-```bash
-colcon build --symlink-install
-```
-
-특정 패키지만 빌드하려면 다음 명령을 사용한다.
+`my_robot_controller` 패키지를 빌드한다.
 
 ```bash
 colcon build --symlink-install --packages-select my_robot_controller
 ```
 
-빌드가 완료되면 워크스페이스 환경을 현재 터미널에 적용한다.
+정상적인 경우 다음과 유사한 결과가 출력된다.
 
-```bash
-source install/setup.bash
+```text
+Starting >>> my_robot_controller
+Finished <<< my_robot_controller [실행 시간]
+
+Summary: 1 package finished
 ```
 
-ROS 2 기본 환경과 현재 워크스페이스 환경을 자동 적용하려면 `~/.bashrc`에 다음 내용을 추가할 수 있다.
+이 출력은 패키지 빌드가 성공했다는 뜻이다.
+
+빌드가 완료되면 현재 워크스페이스 환경을 적용한다.
 
 ```bash
-source /opt/ros/humble/setup.bash
 source ~/ros2_ws/install/setup.bash
 ```
 
-단, 아직 한 번도 빌드하지 않아 `install/setup.bash`가 없는 상태라면 두 번째 줄에서 오류가 발생할 수 있다.
-
----
-
-## 15. 노드 실행
-
-예시 노드가 `setup.py`의 `console_scripts`에 등록되어 있다면 다음 명령으로 실행한다.
+실행 파일이 정상적으로 등록되었는지 확인한다.
 
 ```bash
-source /opt/ros/humble/setup.bash
-source ~/ros2_ws/install/setup.bash
+ros2 pkg executables my_robot_controller
+```
+
+정상적인 경우 다음과 같이 출력된다.
+
+```text
+my_robot_controller controller_node
+```
+
+아무것도 출력되지 않는다면 다음 사항을 확인한다.
+
+- `controller_node.py` 파일이 실제로 존재하는가
+- `setup.py`의 `console_scripts`에 실행 항목이 등록되어 있는가
+- 수정 후 다시 `colcon build`를 실행했는가
+- 빌드 후 `source install/setup.bash`를 실행했는가
+
+## 15. 노드 실행 및 확인
+
+### 15.1 첫 번째 터미널에서 노드 실행
+
+빌드와 환경 설정이 끝난 터미널에서 다음 명령을 실행한다.
+
+```bash
 ros2 run my_robot_controller controller_node
 ```
 
-예상 출력은 다음과 같다.
+정상적인 경우 다음과 같은 로그가 출력된다.
 
 ```text
-[INFO] [시간] [robot_controller]: my_robot_controller 노드가 실행되었습니다.
+[INFO] [시간] [robot_controller]: controller_node가 실행되었습니다.
 ```
 
-다른 터미널에서 실행 중인 노드를 확인한다.
+이후 터미널이 멈춘 것처럼 보이지만 오류가 아니다. `rclpy.spin(node)`이 노드를 계속 실행하며 메시지나 요청을 기다리고 있는 상태이다.
+
+노드가 실행 중인 동안에는 해당 터미널에서 다른 명령을 입력할 수 없다. 실행 상태를 확인하려면 새 터미널을 하나 더 열어야 한다.
+
+### 15.2 두 번째 터미널에서 노드 목록 확인
+
+새 터미널을 열고 다음 명령을 실행한다.
 
 ```bash
+source /opt/ros/humble/setup.bash
+source ~/ros2_ws/install/setup.bash
 ros2 node list
 ```
 
-예상 출력:
+정상적인 경우 다음과 같이 출력된다.
 
 ```text
 /robot_controller
 ```
 
-노드를 종료할 때는 실행 터미널에서 `Ctrl+C`를 누른다.
+이는 `robot_controller`라는 ROS 2 노드가 현재 실행 중이라는 뜻이다.
+
+### 15.3 노드 종료
+
+다시 노드를 실행한 첫 번째 터미널로 돌아가서 다음 키를 누른다.
+
+```text
+Ctrl + C
+```
+
+본 문서의 `controller_node.py` 코드를 사용했다면 다음과 같이 정상 종료 메시지가 출력된다.
+
+```text
+[INFO] [시간] [robot_controller]: 사용자 요청으로 노드를 종료합니다.
+```
+
+그 후 명령 프롬프트로 돌아온다.
+
+### 15.4 KeyboardInterrupt 메시지가 출력되는 경우
+
+다음과 같이 긴 오류 내용이 출력될 수 있다.
+
+```text
+KeyboardInterrupt
+[ros2run]: Interrupt
+```
+
+이것은 노드 실행 자체가 실패한 것이 아니다. `Ctrl+C`를 눌러 실행을 강제로 중단하면서 Python의 `KeyboardInterrupt`가 화면에 표시된 것이다.
+
+다만 제출용 실습에서는 오류처럼 보일 수 있으므로 `controller_node.py`의 `main()` 함수를 다음처럼 작성하는 것이 좋다.
+
+```python
+def main(args=None):
+    rclpy.init(args=args)
+    node = RobotController()
+
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        node.get_logger().info('사용자 요청으로 노드를 종료합니다.')
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
+```
+
+수정 후 다시 빌드한다.
+
+```bash
+cd ~/ros2_ws
+source /opt/ros/humble/setup.bash
+colcon build --symlink-install --packages-select my_robot_controller
+source install/setup.bash
+```
+
+그다음 다시 실행한다.
+
+```bash
+ros2 run my_robot_controller controller_node
+```
 
 ---
 
@@ -837,14 +991,6 @@ src
 cd ~/ros2_ws
 tree -L 2
 ```
-```bash
-tree src
-→ src 내부를 자세히 확인
-→ 패키지 파일 구조 확인용
-```
-tree -L 2
-→ 현재 폴더에서 2단계까지만 확인
-→ 워크스페이스 전체 구조 확인용
 
 예상 결과:
 
@@ -990,56 +1136,195 @@ cp ~/ros2_ws/ros2_ws_src.zip 2/4/
 
 ## 20. 전체 실습 명령 요약
 
-아래 명령을 순서대로 실행하면 워크스페이스 생성부터 패키지 빌드까지 진행할 수 있다.
+아래 순서대로 실행하면 워크스페이스 생성부터 노드 실행과 종료까지 진행할 수 있다.
+
+### 20.1 워크스페이스와 패키지 생성
 
 ```bash
-# 1. ROS 2 Humble 환경 적용
+# ROS 2 Humble 환경 적용
 source /opt/ros/humble/setup.bash
 
-# 2. 필요한 도구 설치
+# 필요한 도구 설치
 sudo apt update
 sudo apt install -y python3-colcon-common-extensions python3-rosdep tree zip
 
-# 3. 워크스페이스 생성
+# 워크스페이스 생성
 mkdir -p ~/ros2_ws/src
-cd ~/ros2_ws
 
-# 4. 빈 워크스페이스 빌드 확인
-colcon build
-
-# 5. Python 패키지 생성
+# src 디렉토리로 이동
 cd ~/ros2_ws/src
+
+# Python 패키지 생성
 ros2 pkg create \
   --build-type ament_python \
   --dependencies rclpy \
   --license Apache-2.0 \
   my_robot_controller
+```
 
-# 6. 패키지 구조 확인
+### 20.2 controller_node.py 작성
+
+```bash
+nano ~/ros2_ws/src/my_robot_controller/my_robot_controller/controller_node.py
+```
+
+다음 코드를 입력한다.
+
+```python
+import rclpy
+from rclpy.node import Node
+
+
+class RobotController(Node):
+
+    def __init__(self):
+        super().__init__('robot_controller')
+        self.get_logger().info('controller_node가 실행되었습니다.')
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = RobotController()
+
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        node.get_logger().info('사용자 요청으로 노드를 종료합니다.')
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
+```
+
+### 20.3 setup.py 수정
+
+```bash
+nano ~/ros2_ws/src/my_robot_controller/setup.py
+```
+
+전체 내용을 다음과 같이 작성한다.
+
+```python
+from setuptools import find_packages, setup
+
+package_name = 'my_robot_controller'
+
+setup(
+    name=package_name,
+    version='0.0.0',
+    packages=find_packages(exclude=['test']),
+    data_files=[
+        (
+            'share/ament_index/resource_index/packages',
+            ['resource/' + package_name]
+        ),
+        (
+            'share/' + package_name,
+            ['package.xml']
+        ),
+    ],
+    install_requires=['setuptools'],
+    zip_safe=True,
+    maintainer='hanmin',
+    maintainer_email='hanmin@todo.todo',
+    description='ROS 2 Python robot controller package',
+    license='Apache-2.0',
+    extras_require={
+        'test': [
+            'pytest',
+        ],
+    },
+    entry_points={
+        'console_scripts': [
+            'controller_node = my_robot_controller.controller_node:main',
+        ],
+    },
+)
+```
+
+### 20.4 패키지 구조 확인
+
+```bash
+tree ~/ros2_ws/src/my_robot_controller
+```
+
+`controller_node.py`가 포함되어 있어야 한다.
+
+### 20.5 빌드
+
+```bash
 cd ~/ros2_ws
-tree src
-
-# 7. 의존성 설치
+source /opt/ros/humble/setup.bash
 rosdep install --from-paths src --ignore-src -r -y
-
-# 8. 패키지 빌드
-colcon build --symlink-install
-
-# 9. 워크스페이스 환경 적용
+colcon build --symlink-install --packages-select my_robot_controller
 source install/setup.bash
+```
 
-# 10. 패키지 확인
-ros2 pkg list | grep my_robot_controller
+### 20.6 실행 파일 등록 확인
 
-# 11. 노드 실행
+```bash
+ros2 pkg executables my_robot_controller
+```
+
+정상 출력:
+
+```text
+my_robot_controller controller_node
+```
+
+### 20.7 노드 실행
+
+첫 번째 터미널:
+
+```bash
 ros2 run my_robot_controller controller_node
+```
 
-# 12. src 압축
+정상 출력:
+
+```text
+[INFO] [시간] [robot_controller]: controller_node가 실행되었습니다.
+```
+
+### 20.8 실행 중인 노드 확인
+
+두 번째 터미널을 새로 열고 실행한다.
+
+```bash
+source /opt/ros/humble/setup.bash
+source ~/ros2_ws/install/setup.bash
+ros2 node list
+```
+
+정상 출력:
+
+```text
+/robot_controller
+```
+
+### 20.9 노드 종료
+
+첫 번째 터미널에서 다음 키를 누른다.
+
+```text
+Ctrl + C
+```
+
+정상 종료 출력:
+
+```text
+[INFO] [시간] [robot_controller]: 사용자 요청으로 노드를 종료합니다.
+```
+
+### 20.10 src 디렉토리 압축
+
+```bash
 cd ~/ros2_ws
 zip -r ros2_ws_src.zip src
 ```
-
-패키지 생성 직후에는 `controller_node.py`와 `setup.py`의 `console_scripts` 등록이 자동으로 포함되지 않을 수 있다. 노드 실행 실습까지 진행하려면 본 문서의 예시처럼 두 항목을 직접 추가해야 한다.
 
 ---
 
@@ -1107,12 +1392,84 @@ source install/setup.bash
 No executable found
 ```
 
-확인할 사항:
+이 오류는 ROS 2가 `my_robot_controller` 패키지는 찾았지만, 패키지 안에서 실행할 `controller_node`를 찾지 못했다는 뜻이다.
 
-1. `setup.py`의 `entry_points`에 실행 항목이 등록되어 있는지 확인한다.
-2. Python 파일에 `main()` 함수가 존재하는지 확인한다.
-3. 패키지를 다시 빌드한다.
-4. `install/setup.bash`를 다시 source한다.
+먼저 파일 구조를 확인한다.
+
+```bash
+tree ~/ros2_ws/src/my_robot_controller
+```
+
+다음 파일이 있어야 한다.
+
+```text
+my_robot_controller/
+└── my_robot_controller/
+    ├── __init__.py
+    └── controller_node.py
+```
+
+그다음 `setup.py`에 다음 항목이 등록되어 있어야 한다.
+
+```python
+entry_points={
+    'console_scripts': [
+        'controller_node = my_robot_controller.controller_node:main',
+    ],
+},
+```
+
+확인 후 다시 빌드한다.
+
+```bash
+cd ~/ros2_ws
+source /opt/ros/humble/setup.bash
+colcon build --symlink-install --packages-select my_robot_controller
+source install/setup.bash
+```
+
+등록된 실행 파일을 확인한다.
+
+```bash
+ros2 pkg executables my_robot_controller
+```
+
+정상 출력:
+
+```text
+my_robot_controller controller_node
+```
+
+그다음 실행한다.
+
+```bash
+ros2 run my_robot_controller controller_node
+```
+
+### 21.5 Ctrl+C 종료 시 KeyboardInterrupt가 출력되는 경우
+
+노드 실행 중 `Ctrl+C`를 눌렀을 때 다음과 같이 출력될 수 있다.
+
+```text
+KeyboardInterrupt
+[ros2run]: Interrupt
+```
+
+이는 빌드나 실행 실패가 아니라 사용자가 실행을 중단했다는 뜻이다.
+
+오류처럼 보이지 않게 종료하려면 `controller_node.py`에 다음 구조를 사용한다.
+
+```python
+try:
+    rclpy.spin(node)
+except KeyboardInterrupt:
+    node.get_logger().info('사용자 요청으로 노드를 종료합니다.')
+finally:
+    node.destroy_node()
+    rclpy.shutdown()
+```
+
+수정 후 다시 빌드하고 환경을 적용한다.
 
 ```bash
 cd ~/ros2_ws
@@ -1120,7 +1477,9 @@ colcon build --symlink-install --packages-select my_robot_controller
 source install/setup.bash
 ```
 
-### 21.5 build 결과가 이전 상태로 남은 경우
+### 21.6 build 결과가 이전 상태로 남은 경우
+
+
 
 ```bash
 cd ~/ros2_ws

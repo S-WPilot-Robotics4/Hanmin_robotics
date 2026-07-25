@@ -285,7 +285,57 @@ ros2 run turtlesim turtlesim_node
 ### 10.2 turtle_teleop_key 실행
 
 두 번째 터미널에서 다음 명령을 실행한다.
+[학습일지]
 
+일 자 : 2026 / 7 / 18 (토)
+
+학습 과정 : 로보틱스 과정 2-4 : ROS2 워크스페이스 생성, Python 패키지 구성 및 빌드 실습
+
+학습시간 : 12:00 PM ~ 4:00 PM
+
+학습장소학교 : DIP
+
+학습내용 :
+
+과정 2-4에서는 Ubuntu 22.04와 ROS2 Humble 환경에서 Python 기반 ROS2 패키지를 생성하고, 빌드한 뒤 실제 노드로 실행하는 전체 과정을 학습하였다.
+
+먼저 source /opt/ros/humble/setup.bash 명령으로 현재 터미널에 ROS2 Humble 환경을 적용하고, printenv ROS_DISTRO 명령을 통해 정상적으로 humble이 출력되는지 확인하였다.
+
+이후 mkdir -p ~/ros2_ws/src 명령을 사용하여 ROS2 워크스페이스와 소스 디렉토리를 생성하였다. 워크스페이스는 ROS2 패키지와 코드를 개발하고 빌드하기 위한 작업 공간이며, 직접 작성한 패키지는 src 디렉토리 안에 배치한다는 점을 학습하였다.
+
+다음으로 ROS2 워크스페이스를 빌드하는 도구인 colcon을 조사하였다. colcon build는 패키지를 생성하는 명령이 아니라 src 내부의 패키지를 찾아 빌드하는 명령이며, 빌드가 완료되면 build, install, log 디렉토리가 생성된다는 것을 확인하였다. 또한 --symlink-install 옵션이 Python 원본 파일과 설치 결과를 심볼릭 링크 방식으로 연결하여 코드 수정 사항을 빠르게 반영하는 기능이라는 점을 학습하였다.
+
+ros2 pkg create 명령을 사용하여 my_robot_controller라는 Python 기반 ROS2 패키지를 생성하였다. 빌드 시스템은 ament_python으로 지정하고, Python에서 ROS2 기능을 사용하기 위해 rclpy 의존성을 추가하였다.
+
+패키지 내부에는 package.xml, setup.py, setup.cfg, resource, test 등의 파일과 디렉토리가 생성되었다. package.xml은 패키지 이름, 버전, 라이선스, 빌드 방식, 필요한 의존성 등을 기록하는 파일이고, setup.py는 Python 패키지의 설치 방법과 ros2 run에서 실행할 노드를 등록하는 파일이라는 점을 학습하였다.
+
+실제로 controller_node.py 파일을 작성하고, setup.py의 console_scripts에 다음 실행 항목을 등록하였다.
+
+'controller_node = my_robot_controller.controller_node:main'
+
+이를 통해 ros2 run my_robot_controller controller_node 명령을 실행하면 controller_node.py 파일의 main() 함수가 실행되도록 구성하였다.
+
+또한 rosdep install --from-paths src --ignore-src -r -y 명령을 사용하여 package.xml에 기록된 의존성을 확인하고 필요한 패키지를 설치하였다. 이후 colcon build --symlink-install --packages-select my_robot_controller 명령으로 해당 패키지만 빌드하고, source install/setup.bash 명령으로 빌드된 워크스페이스 환경을 현재 터미널에 적용하였다.
+
+마지막으로 ros2 pkg executables my_robot_controller 명령을 통해 controller_node가 실행 파일로 정상 등록되었는지 확인하고, ros2 run my_robot_controller controller_node 명령으로 실제 노드를 실행하였다. 다른 터미널에서 ros2 node list를 실행하여 /robot_controller 노드가 정상적으로 실행 중인 것도 확인하였다.
+
+tree src 명령으로 src 내부의 모든 패키지 파일 구조를 확인하고, tree -L 2 명령으로 워크스페이스 전체 구조를 2단계까지만 확인하는 방법도 학습하였다.
+
+힘들었던 부분 :
+
+처음에는 패키지만 생성하면 바로 ros2 run으로 실행할 수 있다고 생각했지만, 실제로는 실행할 Python 파일인 controller_node.py를 직접 작성하고 setup.py의 console_scripts에 실행 항목을 등록해야 한다는 점이 어려웠다.
+
+또한 패키지를 수정한 뒤에는 다시 colcon build를 수행하고 source install/setup.bash를 적용해야 변경된 내용을 ROS2가 인식한다는 흐름을 이해하는 데 시간이 필요했다.
+
+특히 의존성이 왜 필요한지 처음에는 이해하기 어려웠지만, 현재 패키지에서 rclpy 기능을 사용하므로 해당 라이브러리가 없으면 노드를 실행할 수 없으며, package.xml에 의존성을 기록하면 다른 환경에서도 필요한 패키지를 확인하고 설치할 수 있다는 점을 알게 되었다.
+
+후기 (이번 프로젝트로 무엇이 가장 크게 변화했나요?) :
+
+이번 실습을 통해 Python 파일 하나를 단순히 실행하는 것과 ROS2 정식 패키지로 구성하여 실행하는 것은 다르다는 점을 이해하게 되었다.
+
+ROS2 패키지는 실제 로봇 시스템에서 카메라, 모터 제어, 센서 처리, 알람 등 여러 기능을 각각 나누어 관리하고 서로 연결하기 위해 필요한 기본 구조라는 것을 알게 되었다.
+
+또한 워크스페이스 생성, 패키지 구성, 의존성 등록, 실행 파일 등록, 빌드, 환경 적용, 노드 실행까지의 전체 흐름을 직접 수행하면서 앞으로 Publisher, Subscriber, Service 등의 기능을 추가하기 위한 기본 기반을 만들 수 있게 되었다.
 ```bash
 ros2 run turtlesim turtle_teleop_key
 ```
