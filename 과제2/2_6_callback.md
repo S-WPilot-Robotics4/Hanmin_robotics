@@ -385,6 +385,12 @@ echo "source ~/ros2_ws/install/setup.bash" >> ~/.bashrc
 source ~/.bashrc
 ```
 
+### 10.5 빌드 확인 이미지
+
+아래 이미지는 `2_6_colcon_build.png` 파일로, `colcon build` 실행 결과를 보여준다.
+
+![colcon build 성공](2_6_colcon_build.png)
+
 ---
 
 ## 11. 실행 방법
@@ -434,6 +440,10 @@ CTRL+C
 [INFO] [timer_node]: 3 seconds passed : 1
 [INFO] [timer_node]: 2 seconds passed : 2
 ```
+
+아래 이미지는 `2_6_ros2_node_info.png` 파일로, 실행 중인 ROS2 노드 정보를 보여준다.
+
+![ros2 node info 결과](2_6_ros2_node_info.png)
 
 실제 ROS2 로그에는 타임스탬프와 로그 레벨, 노드 이름이 함께 표시된다.
 
